@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Fitness App</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div class="app-container">
+    <h1>🏋️ AI-Powered Personal Fitness App</h1>
+
+    <!-- Auth -->
+    <div id="auth-section" class="card">
+      <h2>Login / Register</h2>
+      <input type="text" id="username" placeholder="Username"/>
+      <input type="password" id="password" placeholder="Password"/>
+      <div class="btn-group">
+        <button class="btn primary" onclick="login()">Login</button>
+        <button class="btn success" onclick="register()">Register</button>
+        <button class="btn secondary" onclick="clearFields()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Plan -->
+    <div id="plan-section" class="card hidden">
+      <div class="plan-header">
+        <h2>Welcome, <span id="user-name"></span> 🎉</h2>
+        <button class="btn ghost" onclick="logout()">Logout</button>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label for="goal">Choose Goal</label>
+          <select id="goal">
+            <option value="strength">Strength</option>
+            <option value="weight_loss">Weight Loss</option>
+            <option value="flexibility">Flexibility</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="days">Workout Days (1–6)</label>
+          <input type="number" id="days" value="6" min="1" max="6"/>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn primary" onclick="getPlan()">Get Plan</button>
+        <button class="btn info" onclick="refreshPlan()">🔄 Refresh</button>
+      </div>
+
+      <div id="loader" class="loader hidden"></div>
+
+      <div id="workout"></div>
+      <div id="diet"></div>
+    </div>
+  </div>
+
+  <!-- Popup Modal -->
+  <div id="popup" class="popup hidden">
+    <div class="popup-content">
+      <p id="popup-message"></p>
+      <button class="btn primary" onclick="closePopup()">OK</button>
+    </div>
+  </div>
+
+  <script src="scripts.js"></script>
+</body>
+</html>
