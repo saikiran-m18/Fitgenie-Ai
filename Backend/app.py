@@ -1,105 +1,159 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_jwt_extended import (
-    JWTManager, create_access_token, jwt_required, get_jwt_identity
-)
-from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import timedelta
+from pymongo import MongoClient
+from datetime import datetime
 import os
-from dotenv import load_dotenv
-from recommender import generate_workout_plan, generate_diet_plan
+import recommender
 
-# Load environment variables
-load_dotenv()
-
+# ----------------------------
+# Setup Flask and MongoDB
+# ----------------------------
 app = Flask(__name__)
 CORS(app)
 
-# Config
-app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret-key")
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
-jwt = JWTManager(app)
+print(">>> LOADED app.py with /recommend route")
 
-# MongoDB connection
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/fitness_app")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(MONGO_URI)
 db = client["fitness_app"]
+users = db["users"]
 
-# ✅ Serve frontend
-@app.route("/")
-def serve_index():
-    return send_from_directory("../frontend", "index.html")
+# ----------------------------
+# Root route
+# ----------------------------
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"msg": "Backend is working ✅"})
 
-@app.route("/<path:path>")
-def serve_static(path):
-    return send_from_directory("../frontend", path)
-
-# ---------------- USER AUTH ---------------- #
+# ----------------------------
+# Register route
+# ----------------------------
 @app.route("/register", methods=["POST"])
 def register():
-    data = request.json
+    data = request.get_json()
     username = data.get("username")
     password = data.get("password")
 
-    if db.users.find_one({"username": username}):
-        return jsonify({"msg": "User already exists"}), 400
+    if users.find_one({"username": username}):
+        return jsonify({"error": "User already exists"}), 400
 
     hashed_pw = generate_password_hash(password)
-    db.users.insert_one({"username": username, "password": hashed_pw})
-    return jsonify({"msg": "User registered successfully"}), 201
+    users.insert_one({"username": username, "password": hashed_pw, "profile": {}, "history": []})
+    return jsonify({"msg": "Registration successful"})
 
-
+# ----------------------------
+# Login route
+# ----------------------------
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.json
+    data = request.get_json()
     username = data.get("username")
     password = data.get("password")
 
-    user = db.users.find_one({"username": username})
+    user = users.find_one({"username": username})
     if user and check_password_hash(user["password"], password):
-        token = create_access_token(identity=username)
-        return jsonify({"access_token": token}), 200
-    return jsonify({"msg": "Invalid credentials"}), 401
+        return jsonify({"msg": "Login successful ✅"})
+    else:
+        return jsonify({"error": "Invalid username or password"}), 401
+        
+# ----------------------------
+# User Profile route
+# ----------------------------
+@app.route("/profile", methods=["POST"])
+def save_profile():
+    data = request.get_json()
+    username = data.get("username")
+    profile = data.get("profile")
 
-# ---------------- FITNESS PLAN ---------------- #
+    users.update_one({"username": username}, {"$set": {"profile": profile}})
+    return jsonify({"msg": "Profile updated successfully"})
+
+# ----------------------------
+# Recommend route (diet plan demo)
+# ----------------------------
 @app.route("/recommend", methods=["POST"])
-@jwt_required()
 def recommend():
-    data = request.json
-    goal = data.get("goal", "strength")
-    days = int(data.get("days", 3))
+    print(">>> /recommend route was hit")
+    data = request.get_json()
+    goal = data.get("goal", "general")
 
-    workout_plan = generate_workout_plan(goal, days)
-    diet_plan = generate_diet_plan(goal)
+    workout_plan = recommender.generate_workout_plan(goal)
+    diet_plan = recommender.generate_diet_plan(goal)
+
+    return jsonify({"workout_plan": workout_plan, "diet_plan": diet_plan})
+
+# ----------------------------
+# Mark Done route
+# ----------------------------
+@app.route("/mark_done", methods=["POST"])
+def mark_done():
+    data = request.get_json()
+    username = data.get("username")
+    goal = data.get("goal")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    user = users.find_one({"username": username})
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    history = user.get("history", [])
+
+    if history and history[-1]["date"] == today:
+        return jsonify({"msg": "You've already marked today's workout as completed."})
+
+    history.append({"date": today, "goal": goal})
+    users.update_one({"username": username}, {"$set": {"history": history}})
+
+    return jsonify({"msg": "Workout marked as completed!"})
+
+# ----------------------------
+# Dashboard route
+# ----------------------------
+@app.route("/dashboard", methods=["POST"])
+def get_dashboard():
+    data = request.get_json()
+    username = data.get("username")
+
+    user = users.find_one({"username": username})
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    history = user.get("history", [])
+    
+    # Calculate streak and total workouts
+    total_workouts = len(history)
+    streak = 0
+    if total_workouts > 0:
+        streak = 1
+        for i in range(len(history) - 1, 0, -1):
+            date_current = datetime.strptime(history[i]["date"], "%Y-%m-%d").date()
+            date_prev = datetime.strptime(history[i-1]["date"], "%Y-%m-%d").date()
+            if (date_current - date_prev).days == 1:
+                streak += 1
+            else:
+                break
+    
+    # Simple achievements
+    achievements = []
+    if total_workouts >= 7:
+        achievements.append("Week-long Warrior: Completed 7 workouts!")
+    if total_workouts >= 30:
+        achievements.append("Month-long Maven: Completed 30 workouts!")
+
+    # Format history for chart
+    history_dates = [h["date"] for h in history]
 
     return jsonify({
-        "workout": workout_plan,
-        "diet": diet_plan
-    }), 200
+        "streak": streak,
+        "total_workouts": total_workouts,
+        "achievements": achievements,
+        "history": history_dates
+    })
 
-# ---------------- USER LOGGING ---------------- #
-@app.route("/log", methods=["POST"])
-@jwt_required()
-def add_log():
-    current_user = get_jwt_identity()
-    data = request.json
-    entry = {
-        "user": current_user,
-        "type": data.get("type"),
-        "details": data.get("details")
-    }
-    db.logs.insert_one(entry)
-    return jsonify({"msg": "Log added"}), 201
-
-
-@app.route("/logs", methods=["GET"])
-@jwt_required()
-def get_logs():
-    current_user = get_jwt_identity()
-    logs = list(db.logs.find({"user": current_user}, {"_id": 0}))
-    return jsonify({"logs": logs}), 200
-
-
+# ----------------------------
+# Run server
+# ----------------------------
 if __name__ == "__main__":
     app.run(debug=True)
