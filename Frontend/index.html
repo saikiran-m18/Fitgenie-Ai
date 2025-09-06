@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI Fitness App</title>
+  <title>AI-Powered Personal Fitness App</title>
   <link rel="stylesheet" href="styles.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="app-container">
     <h1>🏋️ AI-Powered Personal Fitness App</h1>
 
-    <!-- Auth -->
     <div id="auth-section" class="card">
       <h2>Login / Register</h2>
       <input type="text" id="username" placeholder="Username"/>
@@ -22,11 +22,26 @@
       </div>
     </div>
 
-    <!-- Plan -->
     <div id="plan-section" class="card hidden">
       <div class="plan-header">
         <h2>Welcome, <span id="user-name"></span> 🎉</h2>
         <button class="btn ghost" onclick="logout()">Logout</button>
+      </div>
+      
+      <div class="card">
+        <h3>User Profile</h3>
+        <label for="height">Height (cm)</label>
+        <input type="number" id="height" placeholder="e.g., 175"/>
+        <label for="weight">Weight (kg)</label>
+        <input type="number" id="weight" placeholder="e.g., 70"/>
+        <label for="age">Age</label>
+        <input type="number" id="age" placeholder="e.g., 30"/>
+        <label for="gender">Gender</label>
+        <select id="gender">
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+        <button class="btn primary" onclick="saveProfile()">Save Profile</button>
       </div>
 
       <div class="grid-2">
@@ -38,7 +53,6 @@
             <option value="flexibility">Flexibility</option>
           </select>
         </div>
-
         <div>
           <label for="days">Workout Days (1–6)</label>
           <input type="number" id="days" value="6" min="1" max="6"/>
@@ -52,12 +66,34 @@
 
       <div id="loader" class="loader hidden"></div>
 
-      <div id="workout"></div>
-      <div id="diet"></div>
+      <div class="plan-grid">
+        <div id="workout" class="plan-card hidden"></div>
+        <div id="diet" class="plan-card hidden"></div>
+      </div>
+
+      <div class="spaced-btn-group">
+        <button class="btn success" id="mark-done-btn" onclick="markTodayDone()">✅ Mark Today Completed</button>
+      </div>
+    </div>
+
+    <div id="dashboard" class="card hidden">
+      <div class="plan-header">
+        <h2>📊 Your Progress</h2>
+        <button class="btn secondary" onclick="toggleDashboard(false)">Close</button>
+      </div>
+
+      <p id="streak-line">🔥 Streak: 0 days | 🧮 Total Workouts: 0</p>
+      <canvas id="progressChart" height="120"></canvas>
+
+      <h3 style="margin-top:16px">🏆 Achievements</h3>
+      <ul id="achievements-list"></ul>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn info" onclick="toggleDashboard(true)">📈 Open Dashboard</button>
     </div>
   </div>
 
-  <!-- Popup Modal -->
   <div id="popup" class="popup hidden">
     <div class="popup-content">
       <p id="popup-message"></p>
