@@ -62,22 +62,6 @@ This project acts as a **personal AI fitness coach**, providing:
 
 ------------------------------------------------------------------------
 
-## 📸 Screenshots
-
-### 🔑 Login & Register
-
-![Login Screenshot](assets/login.png)
-
-### 🏋️ Workout Plan
-
-![Workout Screenshot](assets/workout.png)
-
-### 🥗 Diet Plan
-
-![Diet Screenshot](assets/diet.png)
-
-------------------------------------------------------------------------
-
 ## ⚙️ Installation & Setup
 
 ### 1️⃣ Clone Repo
