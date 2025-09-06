@@ -1,141 +1,231 @@
+// scripts.js
 const API_URL = "http://127.0.0.1:5000";
 
-/* Section switching */
-function showSection(id){
-  document.getElementById("auth-section").classList.add("hidden");
-  document.getElementById("plan-section").classList.add("hidden");
-  document.getElementById(id).classList.remove("hidden");
+// DOM elements
+const authSection = document.getElementById("auth-section");
+const planSection = document.getElementById("plan-section");
+const userNameSpan = document.getElementById("user-name");
+const loader = document.getElementById("loader");
+const workoutDiv = document.getElementById("workout");
+const dietDiv = document.getElementById("diet");
+const popup = document.getElementById("popup");
+const popupMessage = document.getElementById("popup-message");
+const dashboard = document.getElementById("dashboard");
+const streakLine = document.getElementById("streak-line");
+const achievementsList = document.getElementById("achievements-list");
+
+let currentUsername = "";
+let currentGoal = "";
+
+// Helper function to show popups
+function showPopup(message) {
+  popupMessage.textContent = message;
+  popup.classList.remove("hidden");
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  const token = localStorage.getItem("token");
-  const username = localStorage.getItem("username");
-  if (token && username) {
-    document.getElementById("user-name").innerText = username;
-    showSection("plan-section");
+function closePopup() {
+  popup.classList.add("hidden");
+}
+
+// User Authentication
+async function register() {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  const response = await fetch(`${API_URL}/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await response.json();
+  showPopup(data.msg || data.error);
+}
+
+async function login() {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  const response = await fetch(`${API_URL}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await response.json();
+  if (response.ok) {
+    currentUsername = username;
+    userNameSpan.textContent = username;
+    authSection.classList.add("hidden");
+    planSection.classList.remove("hidden");
+    await getDashboard();
   } else {
-    showSection("auth-section");
-  }
-});
-
-function clearFields(){
-  document.getElementById("username").value="";
-  document.getElementById("password").value="";
-}
-
-/* Popup functions */
-function showPopup(message){
-  document.getElementById("popup-message").innerText = message;
-  document.getElementById("popup").classList.remove("hidden");
-}
-function closePopup(){
-  document.getElementById("popup").classList.add("hidden");
-}
-
-/* Register */
-async function register(){
-  const username=document.getElementById("username").value.trim();
-  const password=document.getElementById("password").value;
-  if(!username || !password){return showPopup("Enter username & password");}
-
-  const res=await fetch(`${API_URL}/register`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({username,password})
-  });
-  const data=await res.json();
-  showPopup(data.msg || "Registered successfully ✅");
-}
-
-/* Login */
-async function login(){
-  const username=document.getElementById("username").value.trim();
-  const password=document.getElementById("password").value;
-  if(!username || !password){return showPopup("Enter username & password");}
-
-  const res=await fetch(`${API_URL}/login`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({username,password})
-  });
-  const data=await res.json();
-  if(data.access_token){
-    localStorage.setItem("token", data.access_token);
-    localStorage.setItem("username", username);
-    document.getElementById("user-name").innerText = username;
-    showSection("plan-section");
-  }else{
-    showPopup(data.msg || "❌ Invalid username or password");
+    showPopup(data.error);
   }
 }
 
-function logout(){
-  localStorage.removeItem("token");
-  localStorage.removeItem("username");
-  showSection("auth-section");
+function logout() {
+  currentUsername = "";
+  authSection.classList.remove("hidden");
+  planSection.classList.add("hidden");
+  clearFields();
+  workoutDiv.classList.add('hidden');
+  dietDiv.classList.add('hidden');
 }
 
-/* Get Plan */
-async function getPlan(){
-  const token=localStorage.getItem("token");
-  if(!token) return showPopup("Please login first");
+function clearFields() {
+  document.getElementById("username").value = "";
+  document.getElementById("password").value = "";
+}
 
-  const goal=document.getElementById("goal").value;
-  const days=parseInt(document.getElementById("days").value || "6",10);
-  const loader=document.getElementById("loader");
+// User Profile
+async function saveProfile() {
+  const height = document.getElementById("height").value;
+  const weight = document.getElementById("weight").value;
+  const age = document.getElementById("age").value;
+  const gender = document.getElementById("gender").value;
+
+  if (!height || !weight || !age || !gender) {
+    showPopup("Please fill in all profile fields.");
+    return;
+  }
+
+  const profile = { height, weight, age, gender };
+  const response = await fetch(`${API_URL}/profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: currentUsername, profile }),
+  });
+  const data = await response.json();
+  showPopup(data.msg);
+}
+
+// Get Workout and Diet Plan
+async function getPlan() {
   loader.classList.remove("hidden");
+  const goal = document.getElementById("goal").value;
+  const days = document.getElementById("days").value;
+  currentGoal = goal;
 
-  try{
-    const res=await fetch(`${API_URL}/recommend`,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "Authorization":"Bearer "+token
-      },
-      body:JSON.stringify({goal, days})
-    });
-    const data=await res.json();
+  const response = await fetch(`${API_URL}/recommend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ goal, days, username: currentUsername }),
+  });
+  const data = await response.json();
 
-    const weekDays=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    const split=["Chest","Back","Legs","Biceps","Triceps","Shoulders"];
-    const icons={Chest:"💪",Back:"🦾",Legs:"🦵",Biceps:"💥",Triceps:"🔥",Shoulders:"🏋️"};
-
-    const rows = [];
-    for(let i=0;i<Math.min(days,6);i++){
-      rows.push(
-        `<tr class="fade-stagger" style="animation-delay:${i*120}ms">
-           <td>${weekDays[i]}</td>
-           <td>${icons[split[i]]} ${split[i]}</td>
-         </tr>`
-      );
-    }
-
-    const workoutTable = `
-      <h3>Weekly Workout Plan 🏋️</h3>
-      <table class="workout-table animated">
-        <thead><tr><th>Day</th><th>Workout Focus</th></tr></thead>
-        <tbody>${rows.join("")}</tbody>
-      </table>
-    `;
-    document.getElementById("workout").innerHTML = workoutTable;
-
-    const dietImages=["🍳","🥗","🍲","🥤","🍎","🥘"];
-    const dietHtml = `
-      <div class="diet-card">
-        <h3>Diet Plan 🥗</h3>
-        ${data.diet.map((line,i)=>`
-          <p class="diet-item" style="animation-delay:${i*120}ms">
-            ${dietImages[i % dietImages.length]} ${line}
-          </p>`).join("")}
-      </div>
-    `;
-    document.getElementById("diet").innerHTML = dietHtml;
-
-  } catch (e){
-    showPopup("⚠️ Could not fetch plan. Is the backend running?");
-  } finally{
+  if (response.ok) {
     loader.classList.add("hidden");
+    displayPlan(data.workout_plan, data.diet_plan);
+  } else {
+    loader.classList.add("hidden");
+    showPopup(data.error || "An unexpected error occurred.");
   }
 }
 
-function refreshPlan(){ getPlan(); }
+function refreshPlan() {
+  getPlan();
+}
+
+function displayPlan(workoutPlan, dietPlan) {
+  const workoutOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const dietOrder = ["breakfast", "lunch", "dinner", "snacks"];
+
+  workoutDiv.classList.remove('hidden');
+  dietDiv.classList.remove('hidden');
+
+  workoutDiv.innerHTML = "<h3>🏋️ Workout Plan</h3>";
+  dietDiv.innerHTML = "<h3>🍎 Diet Plan</h3>";
+
+  workoutOrder.forEach(day => {
+    if (workoutPlan[day]) {
+      const dayCard = document.createElement("div");
+      dayCard.className = "plan-item";
+      dayCard.innerHTML = `
+        <h4>${day}</h4>
+        <p>${workoutPlan[day]}</p>
+      `;
+      workoutDiv.appendChild(dayCard);
+    }
+  });
+
+  dietOrder.forEach(meal => {
+    if (dietPlan[meal]) {
+      const mealCard = document.createElement("div");
+      mealCard.className = "plan-item";
+      mealCard.innerHTML = `
+        <h4>${meal.charAt(0).toUpperCase() + meal.slice(1)}</h4>
+        <p>${dietPlan[meal]}</p>
+      `;
+      dietDiv.appendChild(mealCard);
+    }
+  });
+}
+
+// Mark Today as Completed
+async function markTodayDone() {
+  const response = await fetch(`${API_URL}/mark_done`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: currentUsername, goal: currentGoal }),
+  });
+  const data = await response.json();
+  showPopup(data.msg);
+}
+
+// Dashboard
+async function toggleDashboard(show) {
+  if (show) {
+    if (!currentUsername) {
+      showPopup("Please log in to view the dashboard.");
+      return;
+    }
+    dashboard.classList.remove("hidden");
+    await getDashboard();
+  } else {
+    dashboard.classList.add("hidden");
+  }
+}
+
+async function getDashboard() {
+  const response = await fetch(`${API_URL}/dashboard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: currentUsername }),
+  });
+  const data = await response.json();
+
+  if (response.ok) {
+    streakLine.textContent = `🔥 Streak: ${data.streak} days | 🧮 Total Workouts: ${data.total_workouts}`;
+
+    achievementsList.innerHTML = "";
+    data.achievements.forEach(ach => {
+      const li = document.createElement("li");
+      li.textContent = `🏆 ${ach}`;
+      achievementsList.appendChild(li);
+    });
+
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.history,
+        datasets: [{
+          label: 'Workouts Completed',
+          data: data.history.map(() => 1),
+          backgroundColor: 'rgba(54, 162, 235, 0.5)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        }
+      }
+    });
+  } else {
+    showPopup(data.error);
+  }
+}
