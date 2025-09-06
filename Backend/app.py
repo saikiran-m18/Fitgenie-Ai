@@ -1,10 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
 from datetime import datetime
 import os
 import recommender
+import ai_model
+import utils
 
 # ----------------------------
 # Setup Flask and MongoDB
@@ -38,7 +39,7 @@ def register():
     if users.find_one({"username": username}):
         return jsonify({"error": "User already exists"}), 400
 
-    hashed_pw = generate_password_hash(password)
+    hashed_pw = utils.hash_password(password)
     users.insert_one({"username": username, "password": hashed_pw, "profile": {}, "history": []})
     return jsonify({"msg": "Registration successful"})
 
@@ -52,7 +53,7 @@ def login():
     password = data.get("password")
 
     user = users.find_one({"username": username})
-    if user and check_password_hash(user["password"], password):
+    if user and utils.verify_password(password, user["password"]):
         return jsonify({"msg": "Login successful ✅"})
     else:
         return jsonify({"error": "Invalid username or password"}), 401
@@ -66,6 +67,9 @@ def save_profile():
     username = data.get("username")
     profile = data.get("profile")
 
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+    
     users.update_one({"username": username}, {"$set": {"profile": profile}})
     return jsonify({"msg": "Profile updated successfully"})
 
@@ -77,11 +81,35 @@ def recommend():
     print(">>> /recommend route was hit")
     data = request.get_json()
     goal = data.get("goal", "general")
+    days = int(data.get("days", 6))
+    username = data.get("username")
 
-    workout_plan = recommender.generate_workout_plan(goal)
+    # Check if user exists before proceeding
+    user = users.find_one({"username": username})
+    if not user:
+        return jsonify({"error": "User not found. Please log in first."}), 404
+
+    # Fetch user profile to make recommendations more personalized
+    profile = user.get("profile", {})
+    
+    # Handle the case where profile values might be None or strings
+    try:
+        if profile.get('height') is not None:
+            profile['height'] = float(profile['height'])
+        if profile.get('weight') is not None:
+            profile['weight'] = float(profile['weight'])
+        if profile.get('age') is not None:
+            profile['age'] = int(profile['age'])
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid profile data. Height, weight, and age must be numbers."}), 400
+
+    bmi, bmr = ai_model.calculate_bmi_bmr(profile)
+
+    # Pass the days parameter to the recommender
+    workout_plan = recommender.generate_workout_plan(goal, days)
     diet_plan = recommender.generate_diet_plan(goal)
 
-    return jsonify({"workout_plan": workout_plan, "diet_plan": diet_plan})
+    return jsonify({"workout_plan": workout_plan, "diet_plan": diet_plan, "bmi": bmi, "bmr": bmr})
 
 # ----------------------------
 # Mark Done route
